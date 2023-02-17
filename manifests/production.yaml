@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vulcan-anomaly-detector
+  labels:
+    app: vulcan-anomaly-detector
+spec:
+  schedule: "0 8 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          name: vulcan-anomaly-detector
+          labels:
+            app: vulcan-anomaly-detector
+        spec:
+          dnsPolicy: None
+          dnsConfig:
+            nameservers:
+              - 10.2.0.4
+              - 10.2.0.16
+          containers:
+          - name: vulcan-anomaly-detector-container
+            image: connecterra.azurecr.io/vulcan-anomaly-detector:latest
+            command: [ "python" ]
+            args: [ "src/evaluate.py"]
+            envFrom:
+              - secretRef:
+                  name: vulcananomalyenvsecrets
+          imagePullSecrets:
+          - name: docker-azure-auth
+          restartPolicy: Never

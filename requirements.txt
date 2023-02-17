@@ -1,3 +1,4 @@
+git+ssh://git@github.com/Connecterra/ctcharts@63b859b#egg=ctra-charts-client
 pyoats~=0.1.1
 pyarrow~=11.0.0
 fastparquet~=2023.2.0

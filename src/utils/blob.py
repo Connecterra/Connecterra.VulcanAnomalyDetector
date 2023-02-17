@@ -29,10 +29,11 @@ class AzureContainer:
         """Upload a model/experiment to Azure Blob."""
 
         model_name = model_filepath.name
-        model_category = model_name.split("_")[0]
-        model_version = "_".join(model_name.split("_")[1:])
+        descriptor_name = model_name.split("_")[0]
+        farm_id = model_name.split("_")[1]
+        model_version = "_".join(model_name.split("_")[2:])
         blob_client = self.container_client.get_blob_client(
-            blob=f"{service_name}/{model_category}/{model_version}"
+            blob=f"{service_name}/{descriptor_name}/{farm_id}/{model_version}"
         )
 
         with open(model_filepath, "rb") as data:
@@ -41,14 +42,14 @@ class AzureContainer:
         return results
 
     def get_model_from_blob(self,
-                            local_path: Path,
-                            model_category: str,
+                            descriptor_name: str,
+                            farm_id : str,
                             model_version: str,
                             service_name: str = "vulcan"
                             ):
         """Download a model/experiment from Azure blob."""
         blob_client = self.container_client.get_blob_client(
-            blob=f"{service_name}/{model_category}/{model_version}"
+            blob=f"{service_name}/{descriptor_name}/{farm_id}/{model_version}"
         )
         blob_data = blob_client.download_blob()
         return blob_data

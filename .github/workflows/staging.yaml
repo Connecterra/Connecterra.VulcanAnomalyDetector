@@ -1,0 +1,96 @@
+name: staging deployment
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches-ignore:
+      - 'master'
+
+env:
+  APP_NAME: vulcan-anomaly-detector
+  
+  REGISTRY_NAME: connecterra
+  DOCKER_BUILDKIT: 1
+
+  CLUSTER_NAME: eu-aks-E8s-dev
+  CLUSTER_RESOURCE_GROUP: eu-k8-prod
+
+  SECRET_NAME: vulcananomalysecrets
+  ENV_SECRET_NAME: vulcananomalyenvsecrets
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v3
+
+      - name: 'Authenticate GitHub SSH'
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: 'Build and push image'
+        uses: azure/docker-login@v1
+        with:
+          login-server: http://connecterra.azurecr.io/
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      - run: |
+          docker build --ssh github_key=${{env.SSH_AUTH_SOCK}} . -t ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}-staging:${{ github.sha }}
+          docker push ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}-staging:${{ github.sha }}
+  deploy_to_aks:
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v3
+
+      - name: 'Login to Azure AKS'
+        uses: azure/login@v1
+        with:
+          creds: '${{ secrets.AK8S_SECRET }}'
+
+      - name: 'Set AKS context'
+        uses: azure/aks-set-context@v3
+        with:
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          resource-group: ${{ env.CLUSTER_RESOURCE_GROUP }}
+      
+      # Delete existing container
+      - run: |
+          kubectl delete -f ${{ github.workspace }}/manifests/staging.yaml --ignore-not-found=true
+      
+      # Create image pull secret for ACR
+      - uses: azure/k8s-create-secret@v4
+        with:
+          container-registry-url: ${{ env.REGISTRY_NAME }}.azurecr.io
+          container-registry-username: ${{ secrets.ACR_USERNAME }}
+          container-registry-password: ${{ secrets.ACR_PASSWORD }}
+          secret-name: ${{ env.SECRET_NAME }}
+          namespace: default
+
+      - uses: azure/k8s-create-secret@v4
+        with:
+          secret-name: ${{ env.ENV_SECRET_NAME }}
+          namespace: default
+          secret-type: Opaque
+          string-data: "{
+            \"MODEL_REGISTRY_ACC\": \"modelregistry\",
+            \"MODEL_REGISTRY_KEY\": \"${{secrets.MODEL_REGISTRY_KEY}}\",
+            \"CHARTSAPI_USERNAME\": \"${{secrets.CHARTSAPI_USERNAME}}\",
+            \"CHARTSAPI_PASSWORD\": \"${{secrets.CHARTSAPI_PASSWORD}}\"
+          }"
+
+      # Deploy app to AKS
+      - uses: azure/k8s-deploy@v4.6
+        with:
+          manifests: |
+            ${{ github.workspace }}/manifests/staging.yaml
+          images: |
+            ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.APP_NAME }}-staging:${{ github.sha }}
+          imagepullsecrets: |
+            ${{ env.SECRET_NAME }}
+            ${{ env.ENV_SECRET_NAME}}
+          namespace: default
+

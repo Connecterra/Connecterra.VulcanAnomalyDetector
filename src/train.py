@@ -22,7 +22,19 @@ def test_model(model, test_data):
     """
     scores = model.get_scores(test_data.values)
     return scores
+
+
 def plot_anomaly(data, scores, percentile=0.99):
+    """Plot the anomaly scores.
+
+    Args:
+        data (pd.Series): Data.
+        scores (np.array): Anomaly scores.
+        percentile (float, optional): Percentile to use for threshold. Defaults to 0.99.
+
+    Returns:
+        matplotlib.figure.Figure: Figure.
+    """
     threshold = QuantileThreshold()
     threshold_values = threshold.get_threshold(scores, percentile)
     anomalies = scores > threshold_values
@@ -38,7 +50,7 @@ def plot_anomaly(data, scores, percentile=0.99):
     return fig
 
 
-def train_regression(training_data: pd.Series, window: int=10):
+def train_regression(training_data: pd.Series, window: int = 10):
     """Train the regression model.
 
     Args:
