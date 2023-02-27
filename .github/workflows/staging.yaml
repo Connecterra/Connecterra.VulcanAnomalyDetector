@@ -82,8 +82,8 @@ jobs:
             \"MONGO_USERNAME\": \"${{secrets.MONGO_STAGING_USERNAME}}\",
             \"MONGO_PASSWORD\": \"${{secrets.MONGO_STAGING_PASSWORD}}\",
             \"ACF_AUTH_URL\": \"https://acf-auth-staging.azurewebsites.net\",
-            \"ACF_AUTH_USERNAME\": \"${{secrets.CHARTSAPI_USERNAME}}\",
-            \"ACF_AUTH_PASSWORD\": \"${{secrets.CHARTSAPI_PASSWORD}}\",
+            \"ACF_AUTH_USERNAME\": \"${{secrets.ACF_AUTH_USERNAME}}\",
+            \"ACF_AUTH_PASSWORD\": \"${{secrets.ACF_AUTH_PASSWORD}}\",
             \"CHARTSAPI_URL\": \"https://ctra-charts-staging.azurewebsites.net\"
           }"
 
