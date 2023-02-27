@@ -79,8 +79,13 @@ jobs:
           string-data: "{
             \"MODEL_REGISTRY_ACC\": \"modelregistry\",
             \"MODEL_REGISTRY_KEY\": \"${{secrets.MODEL_REGISTRY_KEY}}\",
-            \"CHARTSAPI_USERNAME\": \"${{secrets.CHARTSAPI_USERNAME}}\",
-            \"CHARTSAPI_PASSWORD\": \"${{secrets.CHARTSAPI_PASSWORD}}\"
+            \"MONGO_HOST\": \"cs.mongo.internal.connecterra.io\",
+            \"MONGO_USERNAME\": \"${{secrets.MONGO_USERNAME}}\",
+            \"MONGO_PASSWORD\": \"${{secrets.MONGO_PASSWORD}}\",
+            \"ACF_AUTH_URL\": \"https://acf-auth.azurewebsites.net\",
+            \"ACF_AUTH_USERNAME\": \"${{secrets.ACF_AUTH_USERNAME}}\",
+            \"ACF_AUTH_PASSWORD\": \"${{secrets.ACF_AUTH_PASSWORD}}\",
+            \"CHARTSAPI_URL\": \"https://ctra-charts.azurewebsites.net\"
           }"
       
       # Deploy app to AKS

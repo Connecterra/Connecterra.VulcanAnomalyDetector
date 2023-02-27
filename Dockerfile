@@ -14,6 +14,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN --mount=type=ssh,id=github_key pip install -r requirements.txt
 
+ENV PYTHONPATH=/app
+
 COPY . .
 
 CMD ["python", "src/evaluate.py"]

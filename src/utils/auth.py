@@ -39,17 +39,20 @@ class AuthResponse:
 class Authenticator:
     """ChartsAPI Authenticator Class."""
 
-    TOKEN_URL = r"https://acf-auth-staging.azurewebsites.net/token"
-    TOKEN_REFRESH_URL = r"https://acf-auth-staging.azurewebsites.net/token-renewal"
+    BASE_URL = os.getenv(
+        "ACF_AUTH_URL", r"https://acf-auth-staging.azurewebsites.net"
+    )
+    TOKEN_URL = f"{BASE_URL}/token"
+    TOKEN_REFRESH_URL = f"{BASE_URL}/token-renewal"
 
     def __init__(
-            self, username: Optional[str] = None, password: Optional[str] = None
+        self, username: Optional[str] = None, password: Optional[str] = None
     ):
         """Init Constructor for Authenticator class."""
         if username is None:
-            username = os.getenv("CHARTSAPI_USERNAME")
+            username = os.getenv("ACF_AUTH_USERNAME")
         if password is None:
-            password = os.getenv("CHARTSAPI_PASSWORD")
+            password = os.getenv("ACF_AUTH_PASSWORD")
         self.username = username
         self.password = password
 
@@ -61,8 +64,8 @@ class Authenticator:
             logger.info("Already authenticated.")
             return self.auth
         elif (
-                self.auth is not None
-                and self.auth.refreshTokenExpirationDate > datetime.now(tz=timezone.utc)
+            self.auth is not None
+            and self.auth.refreshTokenExpirationDate > datetime.now(tz=timezone.utc)
         ):
             logger.info("Refreshing authentication token.")
             return self.refresh_token()
