@@ -1,14 +1,11 @@
 """Evaluate the anomaly detection model."""
 
 import datetime
-import io
-import pickle
+import logging
 import subprocess
 from pathlib import Path
-from typing import List
-import logging
+from typing import Optional
 
-import numpy as np
 import pandas as pd
 from ctra_charts.api.compatibility import (
     get_descriptors_compat,
@@ -18,9 +15,14 @@ from oats.threshold import QuantileThreshold
 from src.utils.auth import Authenticator
 from src.utils.blob import AzureContainer
 from src.utils.charts_api import ChartsClient
+from src.utils.dataset import DatasetProcessor
+from src.utils.vulcan import VulcanAnomalyModel
 from src.utils.mongodb import ProdMongo
 
 logger = logging.getLogger("vulcan")
+
+logging.getLogger("pytorch_lightning.utilities").propagate = False
+logging.getLogger("pytorch_lightning.accelerators").propagate = False
 
 
 class Evaluator:
@@ -34,7 +36,7 @@ class Evaluator:
         self.farm_id = farm_id
         self.model_name = model_name
         self.model_version = model_version
-        self.model = None
+        self._model: Optional[VulcanAnomalyModel] = None
 
         authenticator = Authenticator()
         auth = authenticator.authenticate()
@@ -55,25 +57,36 @@ class Evaluator:
         logger.info(f"Found model descriptor id: {model_descriptor.id}")
         return model_descriptor
 
-    def load_model(self):
-        """Load the model from Azure Blob."""
-        logger.info("Downloading model file from Azure Blob.")
+    def download_model(self, save_dir: Path):
+        """Download the model from the Azure Blob."""
+        logger.info("Downloading model from the Azure Blob.")
         container = AzureContainer()
-        model_stream_data = container.get_model_from_blob(
+        model_folder = container.get_model_from_blob(
             descriptor_name=self.descriptor_name,
-            farm_id=self.farm_id,
             model_version=self.model_version,
             service_name=self.model_name,
+            save_folder=save_dir / self.model_version,
         )
-        model_bytes = io.BytesIO()
-        model_stream_data.readinto(model_bytes)
-        self.model = pickle.loads(model_bytes.getvalue())
+        # Return the file that ends with .pt in the contents of model_folder
+        model_filepath = list(model_folder.glob("*.pt"))[0]
+
+        return model_filepath
+
+    def load_model(self, save_dir: Path):
+        """Download & Load the model from Azure Blob."""
+        # Save the model to the given directory
+        model_filepath = self.download_model(save_dir)
+
+        # Load the model from the downloaded file
+        self._model = VulcanAnomalyModel()
+        self._model.load_model_from_path(model_filepath)
+
         logger.info("Downloaded model file from Azure Blob successfully.")
 
-    def evaluate_model(self):
+    def evaluate_model(self, model_folder: Path):
         """Evaluate the model on the last 90 days of data."""
-        if self.model is None:
-            self.load_model()
+        if self._model is None:
+            self.load_model(save_dir=model_folder)
 
         end_date = datetime.datetime.now().strftime("%Y-%m-%d")
         start_date = (
@@ -84,17 +97,18 @@ class Evaluator:
             start_date, end_date, self.model_descriptor.data_category, self.farm_id
         )
 
-        charts_parquet_filepath = (
-            Path(f"charts_{start_date}_{end_date}")
-            / f"{self.model_descriptor.data_category}.parquet"
+        charts_data_folder = Path(f"charts_{start_date}_{end_date}")
+        data = DatasetProcessor(charts_data_folder).process_descriptor(
+            descriptor_name=self.model_descriptor.data_type_name,
+            descriptor_category=self.model_descriptor.data_category,
         )
-        data = self.preprocess_data(charts_parquet_filepath)
-        results = self.model.get_scores(data.values)
-        anomalies = self.extract_anomalies(results)
+        data = data[0]
+        results = self._model.get_scores(data)
+        anomalies = self._model.compute_anomalies(results)
 
         self.push_anomalies(data, anomalies)
 
-    def push_anomalies(self, data: pd.Series, anomalies: np.ndarray):
+    def push_anomalies(self, data: pd.Series, anomalies: pd.DataFrame):
         """Push the found anomalies to MongoDB."""
         ProdMongo().push_anomalies(
             data=data,
@@ -117,17 +131,6 @@ class Evaluator:
         anomalies = results > threshold_values
         logger.info(f"Found {anomalies.sum()} anomalies.")
         return anomalies
-
-    def preprocess_data(self, charts_parquet_filepath):
-        """Preprocess the data for the model."""
-        charts_data = pd.read_parquet(charts_parquet_filepath)
-        charts_data = charts_data[charts_data["farm_id"] == self.farm_id]
-        charts_series = charts_data[self.descriptor_name]
-        charts_series.index = pd.to_datetime(charts_series.index)
-        charts_series = charts_series.asfreq(freq="D")
-        charts_series.interpolate(inplace=True)
-
-        return charts_series
 
     @staticmethod
     def fetch_charts_data(
@@ -162,17 +165,17 @@ class Evaluator:
         logger.info(
             f"Fetching charts data with dataset creator using: {' '.join(args)}"
         )
-        subprocess.run(
-            args,
-            capture_output=True,
-        )
+        process = subprocess.run(args, capture_output=True)
+        logger.info(process.stdout)
+        logger.info(process.stderr)
 
 
 if __name__ == "__main__":
+    model_folder = Path("/home/efehan/data")
     evaluator = Evaluator(
-        farm_id="24",
+        farm_id="153",
         descriptor_name="AvgYieldPerCowFromDailyMilk",
         model_name="vulcan",
-        model_version="2023-02-15.pkl",
+        model_version="2023-03-07",
     )
-    evaluator.evaluate_model()
+    evaluator.evaluate_model(model_folder=model_folder)

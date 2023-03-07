@@ -41,7 +41,7 @@ class ProdMongo(MongoClient):
     def push_anomalies(
         self,
         data: pd.Series,
-        anomalies: np.ndarray,
+        anomalies: pd.DataFrame,
         farm_id: str,
         descriptor_name: str,
         model_name: str,
